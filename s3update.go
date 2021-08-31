@@ -64,7 +64,7 @@ func (u Updater) validate() error {
 // AutoUpdate runs synchronously a verification to ensure the binary is up-to-date.
 // If a new version gets released, the download will happen automatically
 // It's possible to bypass this mechanism by setting the S3UPDATE_DISABLED environment variable.
-func AutoUpdate(u Updater) error {
+func AutoUpdate(u Updater, profile string) error {
 	if os.Getenv("S3UPDATE_DISABLED") != "" {
 		fmt.Println("s3update: autoupdate disabled")
 		return nil
@@ -75,7 +75,7 @@ func AutoUpdate(u Updater) error {
 		return err
 	}
 
-	return runAutoUpdate(u)
+	return runAutoUpdate(u, profile)
 }
 
 // generateS3ReleaseKey dynamically builds the S3 key depending on the os and architecture.
@@ -86,16 +86,19 @@ func generateS3ReleaseKey(path string) string {
 	return path
 }
 
-func runAutoUpdate(u Updater) error {
+func runAutoUpdate(u Updater, profile string) error {
 	localVersion, err := strconv.ParseInt(u.CurrentVersion, 10, 64)
 	if err != nil || localVersion == 0 {
 		return fmt.Errorf("invalid local version")
 	}
 
-	svc := s3.New(session.New(), &aws.Config{
-		Region:      aws.String(u.S3Region),
-		Credentials: u.AWSCredentials,
-	})
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config:            aws.Config{Region: aws.String("us-west-2")},
+		Profile:           profile,
+	}))
+
+	svc := s3.New(sess)
 
 	resp, err := svc.GetObject(&s3.GetObjectInput{Bucket: aws.String(u.S3Bucket), Key: aws.String(u.S3VersionKey)})
 	if err != nil {
@@ -175,3 +178,4 @@ func runAutoUpdate(u Updater) error {
 
 	return nil
 }
+
